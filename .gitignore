@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# locale datas
+# *.blend1
+works/*.jpg
+works/*.mp4
+
 # Distribution / packaging
 .Python
 env/
