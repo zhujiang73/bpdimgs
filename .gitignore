@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # locale datas
-# *.blend1
+*.blend1
 works/*.jpg
 works/*.mp4
 
