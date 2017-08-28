@@ -11,7 +11,9 @@
 
   run cloth01_full script: select cloth01_full to script window, click "run script" button ...
 
-                                                        zhujiangmail@hotmail.com
+  							zhujiangmail@hotmail.com
 
-                                                                   2017.08.29
+  								2017.08.29
+
+
   
