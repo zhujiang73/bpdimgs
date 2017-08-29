@@ -1,6 +1,15 @@
 # bpdimgs
   Blender python script generate images for Deep Learning.
 
+  Blender is a open source 3D graphics and animation software: https://www.blender.org/features/
+
+  Python scripts are a powerful and versatile way to extend Blender functionality. 
+  Most areas of Blender can be scripted, including Animation, Rendering, Import and Export, 
+  Object Creation and the scripting of repetitive tasks: 
+  https://docs.blender.org/manual/en/dev/advanced/scripting/introduction.html
+
+  bpdimgs screenshots:
+
   ![](bpdimgs.png)
 
   ![](bpdimgs_works.png)
