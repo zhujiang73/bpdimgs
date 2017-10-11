@@ -14,15 +14,16 @@
 
   ![](bpdimgs_works.png)
 
-  win10 gui run blender_works.cmd
+  win10 gui run blender_cloth01.cmd, click "run script" button render cloth01 blender 3d model to images.
 
-  run cloth01_quick script: click "run script" button render blender 3d model to images.
+  win10 gui run blender_cloth02.cmd, click "run script" button render cloth02 blender 3d model to images.
 
-  run cloth01_full script: select cloth01_full to script window, click "run script" button ...
+  References blender model demo-files: https://www.blender.org/download/demo-files/
 
   							zhujiangmail@hotmail.com
 
-  								2017.08.29
+  								2017.10.09
+
 
 
   

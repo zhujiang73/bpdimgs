@@ -7,6 +7,8 @@ __pycache__/
 *.so
 
 # locale datas
+bpcv_train
+bpcv_test
 *.blend1
 works/*.jpg
 works/*.mp4
