@@ -9,6 +9,7 @@ __pycache__/
 # locale datas
 bpcv_train
 bpcv_test
+*.mdb
 *.blend1
 works/*.jpg
 works/*.mp4
