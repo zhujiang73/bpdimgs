@@ -9,12 +9,12 @@ layer {
   }
   transform_param {
     mirror: false
-    crop_size: 120
+    crop_size: 137
     mean_file: "./data/mean.binaryproto"
   }
   data_param {
     source: "./train_lmdb"
-    batch_size: 15
+    batch_size: 12
     backend: LMDB
   }
 }
@@ -28,7 +28,7 @@ layer {
   }
   transform_param {
     mirror: false
-    crop_size: 120
+    crop_size: 137
     mean_file: "./data/mean.binaryproto"
   }
   data_param {
@@ -52,7 +52,7 @@ layer {
   }
   convolution_param {
     num_output: 128
-    kernel_size: 11
+    kernel_size: 9
     stride: 4
     weight_filler {
       type: "gaussian"
@@ -151,7 +151,7 @@ layer {
     decay_mult: 0
   }
   convolution_param {
-    num_output: 256
+    num_output: 384
     pad: 1
     kernel_size: 3
     weight_filler {
