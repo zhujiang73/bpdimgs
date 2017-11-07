@@ -1,14 +1,9 @@
-#!/usr/bin/env python
-
-import numpy as np
-import os
 import sys
-import glob
 import time
-import copy
+import threading
 
-import sys
-sys.path.append('c:\\mingw\\python')
+sys.path.append('c:/mingw/python')
+#sys.path.append('/usr/local/python')
 #print(sys.path)
 
 import caffe
@@ -16,162 +11,286 @@ import caffe
 from   skimage import transform as sktr
 from   skimage import io as skio
 
-import gi 
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk
-
 import matplotlib.cm as cm
 from matplotlib.figure import Figure
 
+import numpy as np
 from numpy import arange, sin, pi
 #from matplotlib.backends.backend_gtk3agg import FigureCanvasGTK3Agg as FigureCanvas
 from matplotlib.backends.backend_gtk3cairo import FigureCanvasGTK3Cairo as FigureCanvas
 
-rf_conv      = 137
-set_gpu_mode = 0
-height_plot  = 600
-width_plot   = 620
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import GLib, Gtk, GObject
+from gi.repository.GdkPixbuf import Pixbuf
 
-def print_data(str_name, data):
-	print ("{0} : {1}".format(str_name, data) ) 
-	
-def convert_mean(binMean, npyMean):
-	blob = caffe.proto.caffe_pb2.BlobProto()
-	bin_mean = open(binMean, 'rb' ).read()
-	blob.ParseFromString(bin_mean)
-	arr = np.array( caffe.io.blobproto_to_array(blob) )
-	npy_mean = arr[0]
-	np.save(npyMean, npy_mean )
 
-def show_data(ax, str_title, data_p, padsize=1, padval=0):
-	data = copy.deepcopy(data_p)	
-	data -= data.min()
-	data /= data.max()
-	# force the number of filters to be square
-	n = int(np.ceil(np.sqrt(data.shape[0])))
-	padding = ((0, n ** 2 - data.shape[0]), (0, padsize), (0, padsize)) + ((0, 0),) * (data.ndim - 3)
-	data = np.pad(data, padding, mode='constant', constant_values=(padval, padval))
-	# tile the filters into an image
-	data = data.reshape((n, n) + data.shape[1:]).transpose((0, 2, 1, 3) + tuple(range(4, data.ndim + 1)))
-	data = data.reshape((n * data.shape[1], n * data.shape[3]) + data.shape[4:])
-	ax.imshow(data, cmap = 'gray', origin = 'lower')
+from  gtkcaffemcv  import  convert_mean, show_data
+from  gtkcaffemcv  import  ImgsListView, McmCaffeNet
+from  gtkcaffemcv  import  McThread, FnsListThread, Caffe_Hm_Thread
 
-if set_gpu_mode:
-	caffe.set_mode_gpu()
-	caffe.set_device(0)
-	#caffe.set_device(1)
-	caffe.select_device(0, True)
-	print("GPU mode")
-else:
-	caffe.set_mode_cpu()
-	print("CPU mode")
+class main:
+    def __init__(self):
+        self.builder = Gtk.Builder()
+        self.builder.add_from_file("./data/gtkwin.glade")
 
-net_file=".\\data\\caffenet_places.prototxt"
+        self.imgs_show_idx = 0
+        self.imgs_list_size = 8
 
-#caffe_model=".\\models\\caffenet_train_quick_iter_4000.caffemodel"
-caffe_model=".\\models\\caffenet_train_quick_iter_5000.caffemodel"
+        self.img_width_1x = 0
+        self.img_height_1x = 0
 
-mean_bin=".\\data\\mean.binaryproto"
-mean_npy=".\\data\\mean.npy"
+        self.img_width = self.img_width_1x
+        self.img_height = self.img_height_1x
 
-convert_mean(mean_bin, mean_npy)
+        self.str_img_fn = ""
 
-imagenet_labels_filename = ".\\data\\synset_places.txt"
-labels = np.loadtxt(imagenet_labels_filename, str, delimiter='\t')
+        self.toolbutton1 = self.builder.get_object('toolbutton1')
+        self.toolbutton3 = self.builder.get_object('toolbutton3')
+        self.toolbutton4 = self.builder.get_object('toolbutton4')
+        self.toolbutton5 = self.builder.get_object('toolbutton5')
+        self.toolbutton6 = self.builder.get_object('toolbutton6')
 
-net_full_conv = caffe.Net(network_file = net_file, phase = caffe.TEST, weights = caffe_model) 
+        self.toolbutton1.connect("clicked", self.on_toolbutton1)
+        self.toolbutton3.connect("clicked", self.on_toolbutton3)
+        self.toolbutton4.connect("clicked", self.on_toolbutton4)
+        self.toolbutton5.connect("clicked", self.on_toolbutton5)
+        self.toolbutton6.connect("clicked", self.on_toolbutton6)
 
-# load input and configure preprocessing
+        self.window = self.builder.get_object('applicationwindow1')
+        self.window.set_title("Python Gtk3 Caffe Heat Map")
+        self.window.resize(820,620)
+        self.window.connect("delete-event", self.onDeleteWindow)
 
-#str_img_fn = ".\\imgs\\2008_001042.jpg";  h_res = int(800) ;  w_res = int(960)
-#str_img_fn = ".\\imgs\\fish-bike.jpg"; h_res = int(500) ;  w_res = int(720) 
-str_img_fn = ".\\imgs\\SSDB00253.jpg";   h_res = int(900);  w_res = int(1200)
-#str_img_fn = ".\\imgs\\SSDB00266.jpg";   h_res = int(480) ;  w_res = int(600)
-#str_img_fn = ".\\imgs\\SSDB00266.jpg";   h_res = int(300) ;  w_res = int(360)
+        self.imgs_win = self.builder.get_object('IMG_LIST_VIEW')
 
-img = caffe.io.load_image(str_img_fn, color = False)
-img_show = skio.imread(str_img_fn)
+        self.imgs_list_view = ImgsListView(self)
 
-img_res = sktr.resize(img, (h_res, w_res), mode = 'constant' )
+        self.imgs_win.connect("edge_reached", self.on_edge_reached)
 
-if (h_res < rf_conv or w_res < rf_conv): exit("image error.")
+        self.show_text_view = self.builder.get_object('textview01')
+        self.show_entry = self.builder.get_object('entry1')
 
-print("heatmap ...... ")
+        self.image_view = Gtk.Image()
+        self.show_view = self.image_view
 
-start = time.time()
-net_full_conv.blobs['data'].reshape(1, 1, h_res, w_res)
-transformer = caffe.io.Transformer({'data': net_full_conv.blobs['data'].data.shape})
-transformer.set_mean('data', np.load(mean_npy).mean(1).mean(1))
-transformer.set_transpose('data', (2,0,1))
-#transformer.set_channel_swap('data', (2,1,0))
-transformer.set_raw_scale('data', 255.0)
-# make classification map by forward and print prediction indices at each location
-out = net_full_conv.forward_all(data=np.asarray([transformer.preprocess('data', img_res)]))
-print("Caffe net forward in %.2f s." % (time.time() - start))
- 
-input_caffe_data = net_full_conv.blobs['data'].data[0][0]
-print ("input_caffe_data : {0}".format(input_caffe_data.shape))
+        self.show_win = self.builder.get_object('IMAGE_SHOW')
+        self.show_win.add(self.image_view)
 
-"""
-print_data("blobs['conv7'].data.shape", net_full_conv.blobs['conv7'].data.shape)       
-print_data("blobs['pool7'].data.shape", net_full_conv.blobs['pool7'].data.shape)       
-print_data("blobs['prob'].data.shape", net_full_conv.blobs['prob'].data.shape)     
-"""
+        self.imgs_win.add(self.imgs_list_view)
 
-#fulconv_data = net_full_conv.blobs['conv7'].data
-#fulconv_data = net_full_conv.blobs['pool7'].data
-fulconv_data = net_full_conv.blobs['prob'].data
+        self.lock = threading.Lock()
+        #self.lock = threading.RLock()
 
-str_title = "net_full_conv"
+        self.fns_lock = threading.Lock()
+        self.img_paths = []
+        self.img_pixbufs = []
 
-idx_fn = str_img_fn.rfind("\\")
-str_title_fn = "image: {0}".format(str_img_fn[idx_fn+1:])
-str_title = str_title_fn
+        fns_thread = FnsListThread(self.update_img_fns, self.fns_lock, "./imgs", self.imgs_list_size, 240,
+                                        self.img_paths, self.img_pixbufs)
+        fns_thread.start()
 
-if (h_res == rf_conv and w_res == rf_conv):
-	idx = fulconv_data[0].argmax(axis=0)[0][0]
-	str_class = labels[idx]
-	va = 0.0
-	va = fulconv_data[0][idx]
-	print("classification : {0} {1}".format(str_class, va))
-	str_title = "image: {0} {1}".format(str_class, va)
-else:
-	print (fulconv_data[0].argmax(axis=0))	
+        net_file="./data/caffenet_places.prototxt"
 
-win = Gtk.Window()
-win.connect("delete-event", Gtk.main_quit)
-win.set_default_size(width_plot+200, height_plot)
-win.set_title("Caffe Matplot in GTK3")
+        #caffe_model="./models/caffenet_train_quick_iter_4000.caffemodel"
+        caffe_model="./models/caffenet_train_quick_iter_5000.caffemodel"
+        #caffe_model="./models/caffenet_train_quick_iter_9000.caffemodel"
 
-fig = Figure(figsize=(5, 4), dpi=80)
+        mean_bin="./data/mean.binaryproto"
+        mean_npy="./data/mean.npy"
 
-ax01 = fig.add_subplot(2,2,1)
-ax01.set_title(str_title)
-ax01.imshow(input_caffe_data, cmap = 'gray', origin = 'lower')
-#ax01.axis('off')
+        convert_mean(mean_bin, mean_npy)
 
-ax02 = fig.add_subplot(2,2,2)
-show_data(ax02, "conv1 params", net_full_conv.params['conv1'][0].data.reshape(128*1,9,9))
-ax02.set_title("conv1 params")
+        imagenet_labels_filename = "./data/synset_places.txt"
+        labels = np.loadtxt(imagenet_labels_filename, str, delimiter='\t')
 
-ax03 = fig.add_subplot(2,2,3)
-ax03.set_title(labels[0])
-ax03.imshow(fulconv_data[0,0], cmap = 'hot', origin = 'lower')
+        self.caffe_lock = threading.Lock()
+        self.caffe_show_data = {}
+        self.caffe_busy = 0
 
-ax04 = fig.add_subplot(2,2,4)
-ax04.imshow(fulconv_data[0,1], cmap = 'hot', origin = 'lower')
-ax04.set_title(labels[1])
+        self.caffe_net = McmCaffeNet(self, net_file, caffe_model, mean_npy, imagenet_labels_filename)
 
-sw = Gtk.ScrolledWindow()
-win.add(sw)
-# A scrolled window border goes outside the scrollbars and viewport
-sw.set_border_width(6)
+        self.fig = Figure(figsize=(5, 4), dpi=80)
 
-canvas = FigureCanvas(fig)  # a Gtk.DrawingArea
-canvas.set_size_request(width_plot, height_plot)
-sw.add_with_viewport(canvas)
+        self.window.show_all()
 
-win.show_all()
-Gtk.main()
+    def img_caffe_full_conv(self, str_img_fn, img_width, img_height):
+
+        if (self.caffe_busy == 1):
+            strbuf = Gtk.TextBuffer()
+            strbuf.set_text("message : caffe_net busy ..")
+            self.show_text_view.set_buffer(strbuf)
+            return
+
+        self.caffe_busy = 1
+
+        strbuf = Gtk.TextBuffer()
+        strbuf.set_text("message : caffe_net runing ..")
+        self.show_text_view.set_buffer(strbuf)
+
+        thread_caffe = Caffe_Hm_Thread(self.update_caffe_data, self.caffe_lock, self.caffe_net,
+                                        self.caffe_show_data, str_img_fn, img_width, img_height)
+        thread_caffe.start()    
+        
+        print("caffe_net runing ..")  
+
+
+    def thread_fun(self, str_call_id):
+        for i in range(10):
+            str_txt = "{0} str_timer = {1}".format(str_call_id, i)
+            GLib.idle_add(self.update_progess, str_txt)
+            time.sleep(1.0)
+
+    def update_progess(self, str_txt):
+        #progress.set_text(str(i))
+        strbuf = Gtk.TextBuffer()
+        strbuf.set_text("thread message : {}".format(str_txt))
+        self.show_text_view.set_buffer(strbuf)
+        print("thread message : {}".format(str_txt))
+        return False
+
+    def update_show(self, str_txt):
+        progress.set_text(str(i))
+        self.window.show_all()
+        return False
+
+    def update_caffe_data(self, str_txt):
+
+        self.caffe_lock.acquire()
+        input_caffe_data = self.caffe_show_data["caffe_in"]
+        fulconv_data = self.caffe_show_data["caffe_out"]
+        self.caffe_show_data.clear()
+        self.caffe_lock.release()
+        
+        self.caffe_busy = 0
+
+        strbuf = Gtk.TextBuffer()
+        strbuf.set_text("")
+        self.show_text_view.set_buffer(strbuf)
+
+        ax01 = self.fig.add_subplot(2,2,1)
+        ax01.set_title(self.str_img_fn)
+        ax01.imshow(input_caffe_data, cmap = 'gray', origin = 'lower')
+        #ax01.axis('off')
+
+        ax02 = self.fig.add_subplot(2,2,2)
+        show_data(ax02, "conv1 params", self.caffe_net.net_full_conv.params['conv1'][0].data.reshape(128*1,9,9))
+        ax02.set_title("conv1 params")
+
+        ax03 = self.fig.add_subplot(2,2,3)
+        ax03.set_title(self.caffe_net.labels[0])
+        ax03.imshow(fulconv_data[0,0], cmap = 'hot', origin = 'lower')
+
+        ax04 = self.fig.add_subplot(2,2,4)
+
+        ax04.imshow(fulconv_data[0,1], cmap = 'hot', origin = 'lower')
+        ax04.set_title(self.caffe_net.labels[1])
+        
+        canvas = FigureCanvas(self.fig)  # a Gtk.DrawingArea
+        canvas.set_size_request(900, 720)
+        self.show_win.remove(self.show_view)
+        self.show_win.add(canvas)
+        self.show_win.show_all()
+        self.show_view = canvas
+
+        return False
+
+
+    def update_img_fns(self, str_txt):
+        #print(str_txt)
+        
+        self.imgs_list_view.update_lists()
+        
+        return False
+
+    def onDeleteWindow(self, window, *args):
+        Gtk.main_quit(*args)
+
+    def on_edge_reached(self, scr_win, pos):
+        print ("imgs_list : {0}".format(pos))
+
+    def on_selection_changed(self, selection):#{ on_selection_changed start
+        #print (type(selection))
+        self.image_view = Gtk.Image()
+        iters = selection.get_selected_items()
+        if len(iters)>0:
+            str_idx_sel = iters[0].to_string()
+            idx_sel = int(str_idx_sel)	
+            #print (type(iters[0]),",",type(iters[0].to_string()), " : ", str_idx_sel)
+            #print (idx_sel, img_fns[idx_sel])
+            self.str_img_fn = self.img_paths[self.imgs_show_idx + idx_sel]
+            pixbuf = Pixbuf.new_from_file_at_size(self.img_paths[self.imgs_show_idx + idx_sel], 900, 800)
+            self.image_view.set_from_pixbuf(pixbuf)
+            self.show_entry.set_text(self.img_paths[idx_sel])
+
+            self.img_width_1x = pixbuf.get_width()
+            self.img_height_1x = pixbuf.get_height()
+
+            self.img_width = self.img_width_1x
+            self.img_height = self.img_height_1x
+
+            print ("img_{0} w_h:{1}x{2} {3}".format(idx_sel, 
+                    self.img_width, self.img_height,
+                    self.img_paths[self.imgs_show_idx + idx_sel])) 
+
+        self.show_win.remove(self.show_view)
+        self.show_win.add(self.image_view)
+        self.show_win.show_all()
+        self.show_view = self.image_view
+
+
+        strbuf = Gtk.TextBuffer()
+        strbuf.set_text("")
+        self.show_text_view.set_buffer(strbuf)
+
+        """
+        self.thread = threading.Thread(target=self.thread_fun, args=("on_selection_changed",))
+        self.thread.daemon = True
+        self.thread.start()
+        """
+        #} on_selection_changed end
+
+
+    def on_toolbutton1(self, toolbutton1):
+        #print("toolbutton1")
+        """
+        thread01 = McThread(self.update_progess, self.lock, "on_toolbutton1 th01")
+        thread02 = McThread(self.update_progess, self.lock, "on_toolbutton1 th02")
+        thread02.start()      
+        thread01.start()
+        """
+
+    def on_toolbutton3(self, toolbutton3):
+        #print("toolbutton3")
+        self.img_width = self.img_width_1x
+        self.img_height = self.img_height_1x
+        self.img_caffe_full_conv(self.str_img_fn, self.img_width, self.img_height)
+
+    def on_toolbutton4(self, toolbutton4):
+        #print("toolbutton4")
+        self.img_width = int(self.img_width*1.1 + 0.5)
+        self.img_height = int(self.img_height*1.1 + 0.5)
+        self.img_caffe_full_conv(self.str_img_fn, self.img_width, self.img_height)
+
+    def on_toolbutton5(self, toolbutton5):
+        #print("toolbutton5")
+        self.img_width = int(self.img_width*0.9 + 0.5)
+        self.img_height = int(self.img_height*0.9 + 0.5)
+        self.img_caffe_full_conv(self.str_img_fn, self.img_width, self.img_height)
+
+    def on_toolbutton6(self, toolbutton6):
+        #print("exit")
+        self.window.hide()
+        Gtk.main_quit()
+
+
+if __name__ == "__main__":
+    my_main = main()
+  
+    #my_main.toolbutton3.connect("clicked", my_main.on_toolbutton3)
+    #my_main.toolbutton6.connect("clicked", my_main.on_toolbutton6)
+    #print(sys.path)
+
+    Gtk.main()
 
 
