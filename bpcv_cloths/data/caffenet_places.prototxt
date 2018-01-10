@@ -141,7 +141,7 @@ layer {
   bottom: "drop6"
   top: "conv7"
   convolution_param {
-    num_output: 2
+    num_output: 3
     pad: 1
     kernel_size: 1
   }

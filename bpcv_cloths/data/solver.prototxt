@@ -7,7 +7,7 @@ lr_policy: "fixed"
 gamma: 0.1
 stepsize: 100
 display: 100
-max_iter: 5000
+max_iter: 9000
 momentum: 0.9
 weight_decay: 0.005
 snapshot: 1000

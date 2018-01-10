@@ -1,2 +1,3 @@
 n01  bp_cloth
-n02  place
+n02  car
+n03  place

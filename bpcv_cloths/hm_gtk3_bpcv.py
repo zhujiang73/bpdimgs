@@ -92,9 +92,9 @@ class main:
 
         net_file="./data/caffenet_places.prototxt"
 
-        #caffe_model="./models/caffenet_train_quick_iter_4000.caffemodel"
-        caffe_model="./models/caffenet_train_quick_iter_5000.caffemodel"
+        #caffe_model="./models/caffenet_train_quick_iter_6000.caffemodel"
         #caffe_model="./models/caffenet_train_quick_iter_9000.caffemodel"
+        caffe_model="./models/caffenet_train_quick_iter_15000.caffemodel"
 
         mean_bin="./data/mean.binaryproto"
         mean_npy="./data/mean.npy"
