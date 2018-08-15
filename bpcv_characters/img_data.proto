@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+message ImgData {
+    required int32    class_id = 1;
+    required string   class_name = 2;
+    optional string   file_name = 3;
+    required int32    wh = 4;        
+    required bytes    data = 5;
+}
+
+
+
