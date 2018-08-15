@@ -19,10 +19,12 @@
 
   win10 gui run blender_faces01.cmd, click "run script" button render bpcv_faces01 blender 3d model to images.
 
+  win10 gui run blender_cloth01.cmd, click "run script" button render bpcv_cloth01 blender 3d model to images.
 
   							zhujiangmail@hotmail.com
 
-  							    	2018.08.02
+  							    	2018.08.15
+
 
 
 
